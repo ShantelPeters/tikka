@@ -9,7 +9,7 @@ import {
   CancelRaffleParams,
   AssetDescriptor,
 } from './raffle.types';
-import { ContractResponse } from '../../contract/response';
+import { ContractResponse, RaffleCreateResponse, RaffleCancelResponse } from '../../contract/response';
 import { assertPositiveInt, assertNonEmpty } from '../../utils/validation';
 import { xlmToStroops } from '../../utils/formatting';
 import { nativeToScVal } from '@stellar/stellar-sdk';
@@ -46,7 +46,7 @@ export class RaffleService {
    *
    * @returns The on-chain raffle ID, transaction hash, and ledger.
    */
-  async create(params: RaffleParams): Promise<ContractResponse<number>> {
+  async create(params: RaffleParams): Promise<RaffleCreateResponse> {
     assertNonEmpty(params.ticketPrice, 'ticketPrice');
     assertPositiveInt(params.maxTickets, 'maxTickets');
 
@@ -77,11 +77,17 @@ export class RaffleService {
       ),
     ];
 
-    return await this.contract.invoke<number>(
+    const response = await this.contract.invoke<number>(
       ContractFn.CREATE_RAFFLE,
       contractParams,
       { memo: params.memo },
     );
+
+    return {
+      ...response,
+      raffleEndTime: params.endTime,
+      maxTickets: params.maxTickets,
+    };
   }
 
   /* ------------------------------------------------------------------ */
@@ -142,14 +148,26 @@ export class RaffleService {
   /**
    * Cancels an OPEN raffle (must be the raffle creator).
    */
-  async cancel(params: CancelRaffleParams): Promise<ContractResponse<void>> {
+  async cancel(params: CancelRaffleParams): Promise<RaffleCancelResponse> {
     assertPositiveInt(params.raffleId, 'raffleId');
 
-    return await this.contract.invoke<void>(
+    // First, get the raffle data to know how many tickets were sold
+    const raffleData = await this.get(params.raffleId);
+    const ticketsSold = raffleData.success && raffleData.value 
+      ? raffleData.value.ticketsSold 
+      : undefined;
+
+    const response = await this.contract.invoke<void>(
       ContractFn.CANCEL_RAFFLE,
       [params.raffleId],
       { memo: params.memo },
     );
+
+    return {
+      ...response,
+      raffleId: params.raffleId,
+      ticketsRefunded: ticketsSold,
+    };
   }
 
   /* ------------------------------------------------------------------ */

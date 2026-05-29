@@ -33,8 +33,10 @@ describe('TicketService', () => {
       const mockResult = {
         success: true,
         value: [101, 102, 103, 104, 105],
+        txHash: 'tx-hash',
         transactionHash: 'tx-hash',
         ledger: 1000,
+        status: 'SUCCESS' as const,
       };
 
       contractService.invoke.mockResolvedValue(mockResult);
@@ -47,7 +49,14 @@ describe('TicketService', () => {
         [params.raffleId, 'G...ADDRESS', params.quantity],
         { memo: undefined },
       );
-      expect(result).toEqual(mockResult);
+      expect(result).toMatchObject({
+        success: true,
+        value: [101, 102, 103, 104, 105],
+        txHash: 'tx-hash',
+        ledger: 1000,
+        ticketsPurchased: 5,
+        raffleId: 1,
+      });
     });
 
     it('should throw if raffleId is invalid', async () => {
@@ -71,8 +80,10 @@ describe('TicketService', () => {
       const mockInvokeResult = {
         success: true,
         value: undefined,
+        txHash: 'refund-hash',
         transactionHash: 'refund-hash',
         ledger: 1001,
+        status: 'SUCCESS' as const,
       };
 
       contractService.invoke.mockResolvedValue(mockInvokeResult);
@@ -84,7 +95,13 @@ describe('TicketService', () => {
         [params.raffleId, params.ticketId],
         { memo: undefined },
       );
-      expect(result).toEqual(mockInvokeResult);
+      expect(result).toMatchObject({
+        success: true,
+        txHash: 'refund-hash',
+        ledger: 1001,
+        ticketId: 101,
+        raffleId: 1,
+      });
     });
 
     it('should throw if ticketId is invalid', async () => {
@@ -135,12 +152,14 @@ describe('TicketService', () => {
         .mockResolvedValueOnce({
           success: true,
           value: [101, 102, 103],
+          txHash: 'tx-hash-1',
           transactionHash: 'tx-hash-1',
           ledger: 1000,
         })
         .mockResolvedValueOnce({
           success: true,
           value: [201, 202, 203, 204, 205],
+          txHash: 'tx-hash-2',
           transactionHash: 'tx-hash-2',
           ledger: 1001,
         });
@@ -162,8 +181,12 @@ describe('TicketService', () => {
         ticketIds: [201, 202, 203, 204, 205],
         success: true,
       });
+      expect(result.txHash).toBe('tx-hash-2');
       expect(result.transactionHash).toBe('tx-hash-2');
       expect(result.ledger).toBe(1001);
+      expect(result.totalTicketsPurchased).toBe(8);
+      expect(result.successfulPurchases).toBe(2);
+      expect(result.failedPurchases).toBe(0);
     });
 
     it('should handle partial failures gracefully', async () => {
@@ -183,6 +206,7 @@ describe('TicketService', () => {
       contractService.invoke.mockResolvedValueOnce({
         success: true,
         value: [101, 102, 103],
+        txHash: 'tx-hash-1',
         transactionHash: 'tx-hash-1',
         ledger: 1000,
       });
@@ -193,6 +217,9 @@ describe('TicketService', () => {
       expect(result.value![0].success).toBe(true);
       expect(result.value![1].success).toBe(false);
       expect(result.value![1].error).toContain('Raffle not found');
+      expect(result.totalTicketsPurchased).toBe(3);
+      expect(result.successfulPurchases).toBe(1);
+      expect(result.failedPurchases).toBe(1);
     });
 
     it('should throw if purchases array is empty', async () => {
@@ -243,6 +270,7 @@ describe('TicketService', () => {
       contractService.invoke.mockResolvedValue({
         success: true,
         value: [101, 102, 103],
+        txHash: 'tx-hash',
         transactionHash: 'tx-hash',
         ledger: 1000,
       });

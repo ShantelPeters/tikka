@@ -11,7 +11,12 @@ import {
   BuyBatchResult,
   BatchPurchaseResult,
 } from './ticket.types';
-import { ContractResponse } from '../../contract/response';
+import { 
+  ContractResponse, 
+  TicketBuyResponse, 
+  TicketRefundResponse,
+  BatchPurchaseResponse 
+} from '../../contract/response';
 import { assertPositiveInt } from '../../utils/validation';
 import { TikkaSdkError, TikkaSdkErrorCode } from '../../utils/errors';
 
@@ -27,18 +32,24 @@ export class TicketService {
    * are surfaced as `ExternalContractError` so callers can handle them
    * separately from generic network/contract errors.
    */
-  async buy(params: BuyTicketParams): Promise<ContractResponse<number[]>> {
+  async buy(params: BuyTicketParams): Promise<TicketBuyResponse> {
     const { raffleId, quantity } = params;
     assertPositiveInt(raffleId, 'raffleId');
     assertPositiveInt(quantity, 'quantity');
 
     try {
       const publicKey = await this.contractService['wallet']?.getPublicKey();
-      return await this.contractService.invoke<number[]>(
+      const response = await this.contractService.invoke<number[]>(
         ContractFn.BUY_TICKET,
         [raffleId, publicKey, quantity],
         { memo: params.memo },
       );
+
+      return {
+        ...response,
+        ticketsPurchased: response.value?.length,
+        raffleId,
+      };
     } catch (err) {
       if (
         err instanceof TikkaSdkError &&
@@ -60,17 +71,23 @@ export class TicketService {
    *
    * Token transfer failures during refund are surfaced as `ExternalContractError`.
    */
-  async refund(params: RefundTicketParams): Promise<ContractResponse<void>> {
+  async refund(params: RefundTicketParams): Promise<TicketRefundResponse> {
     const { raffleId, ticketId } = params;
     assertPositiveInt(raffleId, 'raffleId');
     assertPositiveInt(ticketId, 'ticketId');
 
     try {
-      return await this.contractService.invoke<void>(
+      const response = await this.contractService.invoke<void>(
         ContractFn.REFUND_TICKET,
         [raffleId, ticketId],
         { memo: params.memo },
       );
+
+      return {
+        ...response,
+        ticketId,
+        raffleId,
+      };
     } catch (err) {
       if (
         err instanceof TikkaSdkError &&
@@ -123,7 +140,7 @@ export class TicketService {
    * });
    * ```
    */
-  async buyBatch(params: BuyBatchParams): Promise<ContractResponse<BatchPurchaseResult[]>> {
+  async buyBatch(params: BuyBatchParams): Promise<BatchPurchaseResponse> {
     const { purchases, memo } = params;
 
     // Validate inputs
@@ -248,8 +265,12 @@ export class TicketService {
     return {
       success: true,
       value: finalResults,
-      transactionHash: lastTxHash,
+      txHash: lastTxHash,
+      transactionHash: lastTxHash, // Deprecated: use txHash
       ledger: lastLedger,
+      totalTicketsPurchased: finalResults.reduce((sum, r) => sum + (r.success ? r.ticketIds.length : 0), 0),
+      successfulPurchases: finalResults.filter(r => r.success).length,
+      failedPurchases: finalResults.filter(r => !r.success).length,
     };
   }
 }

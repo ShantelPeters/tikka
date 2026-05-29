@@ -32,8 +32,10 @@ describe("RaffleService", () => {
       const mockInvokeResult = {
         success: true,
         value: 1,
+        txHash: "abc",
         transactionHash: "abc",
         ledger: 100,
+        status: 'SUCCESS' as const,
       };
 
       contractService.invoke.mockResolvedValue(mockInvokeResult);
@@ -46,11 +48,15 @@ describe("RaffleService", () => {
         expect.anything(), // Add this to handle the metadata object
       );
 
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         success: true,
         value: 1,
+        txHash: "abc",
         transactionHash: "abc",
         ledger: 100,
+        status: 'SUCCESS',
+        raffleEndTime: params.endTime,
+        maxTickets: params.maxTickets,
       });
     });
 
@@ -160,13 +166,32 @@ describe("RaffleService", () => {
 
   describe("cancel", () => {
     it("should invoke CANCEL_RAFFLE", async () => {
+      const mockGetResult = {
+        success: true,
+        value: {
+          raffleId: 1,
+          creator: "G...",
+          status: 1,
+          ticketPrice: "100",
+          maxTickets: 100,
+          ticketsSold: 25,
+          endTime: Date.now(),
+          asset: "XLM",
+          allowMultiple: true,
+          metadataCid: "",
+        },
+      };
+
       const mockInvokeResult = {
         success: true,
         value: undefined,
+        txHash: "hash",
         transactionHash: "hash",
         ledger: 200,
+        status: 'SUCCESS' as const,
       };
 
+      contractService.simulateReadOnly.mockResolvedValue(mockGetResult);
       contractService.invoke.mockResolvedValue(mockInvokeResult);
 
       const raffleId = 1;
@@ -176,11 +201,27 @@ describe("RaffleService", () => {
         [raffleId],
         expect.anything(),
       );
-      expect(result).toEqual(mockInvokeResult);
+      expect(result).toMatchObject({
+        success: true,
+        txHash: "hash",
+        ledger: 200,
+        raffleId: 1,
+        ticketsRefunded: 25,
+      });
     });
 
     it("should pass memo to invoke", async () => {
-      contractService.invoke.mockResolvedValue({ success: true, value: undefined, transactionHash: "h", ledger: 1 });
+      contractService.simulateReadOnly.mockResolvedValue({ 
+        success: true, 
+        value: { ticketsSold: 0 } 
+      });
+      contractService.invoke.mockResolvedValue({ 
+        success: true, 
+        value: undefined, 
+        txHash: "h",
+        transactionHash: "h", 
+        ledger: 1 
+      });
 
       await service.cancel({ raffleId: 2, memo: { type: "text", value: "cancel-ref" } });
 
@@ -214,7 +255,13 @@ describe("RaffleService", () => {
     };
 
     it("should pass memo to invoke", async () => {
-      contractService.invoke.mockResolvedValue({ success: true, value: 7, transactionHash: "tx7", ledger: 42 });
+      contractService.invoke.mockResolvedValue({ 
+        success: true, 
+        value: 7, 
+        txHash: "tx7",
+        transactionHash: "tx7", 
+        ledger: 42 
+      });
 
       await service.create({ ...baseParams, memo: { type: "id", value: "99" } });
 
@@ -226,7 +273,13 @@ describe("RaffleService", () => {
     });
 
     it("should default metadataCid to empty string when omitted", async () => {
-      contractService.invoke.mockResolvedValue({ success: true, value: 3, transactionHash: "tx3", ledger: 10 });
+      contractService.invoke.mockResolvedValue({ 
+        success: true, 
+        value: 3, 
+        txHash: "tx3",
+        transactionHash: "tx3", 
+        ledger: 10 
+      });
       const result = await service.create(baseParams);
       expect(result.value).toBe(3);
     });

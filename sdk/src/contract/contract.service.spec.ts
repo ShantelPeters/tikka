@@ -134,7 +134,14 @@ describe('ContractService.invoke()', () => {
     expect(lifecycle.sign).toHaveBeenCalledWith(ASSEMBLED_XDR, Networks.TESTNET);
     expect(lifecycle.submit).toHaveBeenCalledWith(SIGNED_XDR);
     expect(lifecycle.poll).toHaveBeenCalledWith(TX_HASH, undefined);
-    expect(result).toEqual({ success: true, value: 99, transactionHash: TX_HASH, ledger: 300 });
+    expect(result).toMatchObject({ 
+      success: true, 
+      value: 99, 
+      txHash: TX_HASH, 
+      transactionHash: TX_HASH, 
+      ledger: 300, 
+      status: 'SUCCESS' 
+    });
   });
 
   it('returns simulated result early when simulateOnly is true', async () => {
@@ -149,7 +156,9 @@ describe('ContractService.invoke()', () => {
     });
 
     expect(signSpy).not.toHaveBeenCalled();
-    expect(result).toEqual({ success: true, value: 42, transactionHash: '', ledger: 0 });
+    expect(result).toMatchObject({ success: true, value: 42, ledger: 0 });
+    expect(result.txHash).toBe('');
+    expect(result.transactionHash).toBe('');
   });
 
   it('passes memo through to lifecycle.simulate()', async () => {
@@ -229,7 +238,14 @@ describe('ContractService.submitSigned()', () => {
 
     expect(lifecycle.submit).toHaveBeenCalledWith(SIGNED_XDR);
     expect(lifecycle.poll).toHaveBeenCalledWith(TX_HASH);
-    expect(result).toEqual({ success: true, value: 99, transactionHash: TX_HASH, ledger: 300 });
+    expect(result).toMatchObject({ 
+      success: true, 
+      value: 99, 
+      txHash: TX_HASH, 
+      transactionHash: TX_HASH, 
+      ledger: 300, 
+      status: 'SUCCESS' 
+    });
   });
 
   it('throws InvalidParams when signedXdr is empty', async () => {

@@ -64,6 +64,10 @@ export interface SubmitResult<T = unknown> {
   txHash: string;
   /** Ledger sequence in which the transaction was included. */
   ledger: number;
+  /** Total fee charged for the transaction in stroops. */
+  feeCharged?: string;
+  /** Base64-encoded transaction result XDR (for debugging). */
+  resultXdr?: string;
 }
 
 /** Configures the polling loop that waits for transaction confirmation. */
@@ -315,12 +319,48 @@ export class TransactionLifecycle {
 
       if (resp.status === rpc.Api.GetTransactionStatus.SUCCESS) {
         const ok = resp as rpc.Api.GetSuccessfulTransactionResponse;
+        
+        // Extract fee charged from transaction metadata
+        let feeCharged: string | undefined;
+        try {
+          const meta = ok.resultMetaXdr;
+          if (meta && typeof meta.v3 === 'function') {
+            const v3 = meta.v3();
+            if (v3 && typeof v3.sorobanMeta === 'function') {
+              const sorobanMeta = v3.sorobanMeta();
+              if (sorobanMeta && typeof sorobanMeta.ext === 'function') {
+                const ext = sorobanMeta.ext();
+                if (ext && typeof ext.v1 === 'function') {
+                  const v1 = ext.v1();
+                  if (v1 && typeof v1.totalNonRefundableResourceFeeCharged === 'function') {
+                    feeCharged = v1.totalNonRefundableResourceFeeCharged().toString();
+                  }
+                }
+              }
+            }
+          }
+        } catch {
+          // Fee extraction is optional, continue without it
+        }
+
+        // Extract resultXdr
+        let resultXdr: string | undefined;
+        try {
+          if (ok.resultXdr && typeof ok.resultXdr.toXDR === 'function') {
+            resultXdr = ok.resultXdr.toXDR('base64');
+          }
+        } catch {
+          // resultXdr extraction is optional
+        }
+
         return {
           returnValue: ok.returnValue
             ? (scValToNative(ok.returnValue) as T)
             : null,
           txHash,
           ledger: ok.ledger,
+          feeCharged,
+          resultXdr,
         };
       }
 
